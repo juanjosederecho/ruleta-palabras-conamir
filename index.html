@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ruleta de palabras · Matemática · CONAMIR</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f0f4f8; color: #1a1a2e; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 16px; }
+  h1 { font-size: 1.4rem; text-align: center; margin: 8px 0; color: #c0392b; }
+  .sub { color: #555; font-size: 0.9rem; margin-bottom: 12px; }
+  #wheel-wrap { position: relative; width: min(92vw, 380px); height: min(92vw, 380px); margin: 10px auto; }
+  canvas { width: 100%; height: 100%; border-radius: 50%; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  .pointer { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-top: 28px solid #c0392b; z-index: 5; filter: drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
+  #result { font-size: 2rem; font-weight: 800; min-height: 48px; text-align: center; color: #2c3e50; margin: 12px 0 4px; }
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin: 8px 0 16px; }
+  button { padding: 12px 22px; font-size: 1rem; font-weight: 700; border: none; border-radius: 10px; cursor: pointer; }
+  #spin { background: #27ae60; color: #fff; }
+  #spin:disabled { background: #95a5a6; cursor: not-allowed; }
+  #reset { background: #e74c3c; color: #fff; }
+  #voice { background: #3498db; color: #fff; }
+  .hist { width: min(92vw, 420px); background: #fff; border-radius: 12px; padding: 12px 16px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  .hist h2 { font-size: 0.95rem; margin-bottom: 6px; }
+  #history { list-style: none; font-size: 0.95rem; }
+  #history li { padding: 3px 0; border-bottom: 1px solid #eee; }
+  .left { color: #7f8c8d; font-size: 0.85rem; text-align: center; }
+</style>
+</head>
+<body>
+  <p class="sub">CONAMIR · Matemática</p>
+  <h1>Ruleta de palabras</h1>
+  <p class="left" id="left">Quedan 21 palabras</p>
+  <div id="wheel-wrap">
+    <div class="pointer"></div>
+    <canvas id="wheel" width="500" height="500"></canvas>
+  </div>
+  <div id="result">Toca GIRAR</div>
+  <div class="btns">
+    <button id="spin">GIRAR</button>
+    <button id="voice">Voz</button>
+    <button id="reset">Reiniciar</button>
+  </div>
+  <div class="hist">
+    <h2>Palabras sacadas</h2>
+    <ul id="history"></ul>
+  </div>
+<script>
+const words = ["basurero","Carbón","Prohibido","Flaco","Calcular","Abeja","Bienvenido","Efímero","Armario","Escoba","bastón","Navidad","buzo","Abuelo","Lámpara","Pizarra","Cabaña","Pared","Helicóptero","Fenómeno","Esqueleto"];
+let pool = [...words];
+let hist = [];
+const canvas = document.getElementById("wheel");
+const ctx = canvas.getContext("2d");
+const colors = ["#e74c3c","#3498db","#2ecc71","#f1c40f","#9b59b6","#e67e22","#1abc9c","#34495e","#e91e63","#00bcd4"];
+let angle = 0, spinning = false;
+
+function draw() {
+  const n = Math.max(pool.length, 1);
+  const slice = 2 * Math.PI / n;
+  ctx.clearRect(0,0,500,500);
+  for (let i = 0; i < n; i++) {
+    ctx.beginPath();
+    ctx.moveTo(250,250);
+    ctx.arc(250,250,248, angle + i*slice, angle + (i+1)*slice);
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.fill();
+    ctx.save();
+    ctx.translate(250,250);
+    ctx.rotate(angle + i*slice + slice/2);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 15px system-ui";
+    const label = pool[i] || "";
+    ctx.fillText(label.length > 12 ? label.slice(0,11)+"..." : label, 230, 5);
+    ctx.restore();
+  }
+  ctx.beginPath(); ctx.arc(250,250,28,0,2*Math.PI); ctx.fillStyle="#fff"; ctx.fill();
+}
+
+function pickIndex() {
+  const n = pool.length;
+  const slice = 2 * Math.PI / n;
+  let a = (1.5 * Math.PI - angle) % (2*Math.PI);
+  if (a < 0) a += 2*Math.PI;
+  return Math.floor(a / slice) % n;
+}
+
+function speak(t) {
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(t);
+  u.lang = "es-PE";
+  u.rate = 0.9;
+  speechSynthesis.speak(u);
+}
+
+document.getElementById("spin").onclick = () => {
+  if (spinning || pool.length === 0) return;
+  spinning = true;
+  document.getElementById("spin").disabled = true;
+  const extra = 8 + Math.random()*6;
+  const target = extra * 2 * Math.PI + Math.random() * 2 * Math.PI;
+  const start = angle;
+  const dur = 4200;
+  const t0 = performance.now();
+  function anim(now) {
+    const p = Math.min((now - t0)/dur, 1);
+    const ease = 1 - Math.pow(1-p, 3);
+    angle = start + target * ease;
+    draw();
+    if (p < 1) requestAnimationFrame(anim);
+    else {
+      spinning = false;
+      document.getElementById("spin").disabled = false;
+      const i = pickIndex();
+      const w = pool[i];
+      document.getElementById("result").textContent = w;
+      speak(w);
+      hist.unshift(w);
+      pool.splice(i,1);
+      document.getElementById("history").innerHTML = hist.map(x=>`<li>${x}</li>`).join("");
+      document.getElementById("left").textContent = pool.length ? `Quedan ${pool.length} palabras` : "Se acabaron";
+      draw();
+    }
+  }
+  requestAnimationFrame(anim);
+};
+
+document.getElementById("voice").onclick = () => {
+  const t = document.getElementById("result").textContent;
+  if (t && t !== "Toca GIRAR") speak(t);
+};
+
+document.getElementById("reset").onclick = () => {
+  pool = [...words]; hist = [];
+  document.getElementById("history").innerHTML = "";
+  document.getElementById("result").textContent = "Toca GIRAR";
+  document.getElementById("left").textContent = "Quedan 21 palabras";
+  angle = 0; draw();
+};
+
+draw();
+</script>
+</body>
+</html>
